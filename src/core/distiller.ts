@@ -22,6 +22,11 @@ mechanics are already filtered out — what you see is the substance.
 Write a long-form Markdown brief. Begin directly with the brief itself — do not
 wrap in JSON, do not add a preamble.
 
+Goal: the receiving agent should finish reading with the same mental model the
+sender had — not just WHAT exists, but WHY it is the way it is, what was already
+ruled out, and what is still open. Reconstruct the sender's reasoning from the
+transcript; do not flatten the session into a list of facts.
+
 Structure:
 - Open with a short paragraph in the user's own words describing the original
   task or goal. Quote the first user message verbatim when it is concise.
@@ -29,6 +34,13 @@ Structure:
   what worked, what errored (with exact error messages in code fences), the
   current state with file paths and exact identifiers, a concrete list of next
   steps.
+- Reconstruct the DECISIONS and their rationale: for each meaningful choice,
+  state what was chosen and WHY, and which alternatives were considered. Capture
+  how the approach evolved across the back-and-forth — course-corrections, user
+  feedback that changed direction, and assumptions that were revised.
+- Call out DEAD ENDS explicitly: approaches that were tried and abandoned, and
+  the reason they failed, so the receiver does not repeat them. Make current
+  BLOCKERS and open questions unmistakable.
 - Use \`##\` for major sections and \`###\` for sub-topics when the session covers
   multiple distinct threads. When the session is a single coherent thread, omit
   the sub-headers.

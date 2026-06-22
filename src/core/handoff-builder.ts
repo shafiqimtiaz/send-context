@@ -147,7 +147,10 @@ export async function buildHandoff(args: BuildHandoffArgs): Promise<BuildHandoff
     spin.start("Distilling session with Gemini");
     try {
       markdown = await deps.distillSession(messages, chosen);
-      appendix = [];
+      // Auto-attach the most recent messages so the receiver can drill into
+      // the literal back-and-forth that the distilled prose summarizes. The
+      // distill path stays prompt-free; the manual path curates interactively.
+      appendix = messages.slice(-APPENDIX_DEFAULT_RECENT);
       source = "distilled";
       spin.stop("Distilled into a handoff brief.");
     } catch (err) {

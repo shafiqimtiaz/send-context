@@ -49,13 +49,16 @@ export function formatToHandoffSkill(input: HandoffInput): string {
     out.push(markdown.trim(), ``);
   }
 
-  out.push(`## Raw Context Appendix`, renderAppendix(appendix), ``);
+  // Only emit the appendix when there is raw context to show — an empty
+  // "Raw Context Appendix (0 messages)" block is dead weight in the brief.
+  if (appendix.length > 0) {
+    out.push(`## Raw Context Appendix`, renderAppendix(appendix), ``);
+  }
 
   return out.join("\n");
 }
 
 function renderAppendix(messages: SessionMessage[]): string {
-  if (messages.length === 0) return "_No raw context included._";
   return messages
     .map((m) => {
       const label = m.role.toUpperCase();

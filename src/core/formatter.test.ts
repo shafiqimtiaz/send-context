@@ -77,14 +77,20 @@ test("formatToHandoffSkill: renders the appendix section when messages are provi
   assert.match(out, /### ASSISTANT\n\nSure, let me look at the current prompt\./);
 });
 
-test("formatToHandoffSkill: shows '_No raw context included._' when appendix is empty", () => {
+test("formatToHandoffSkill: omits the appendix section entirely when appendix is empty", () => {
   const out = formatToHandoffSkill({ ...baseInput, appendix: [] });
-  assert.match(out, /## Raw Context Appendix/);
-  assert.match(out, /_No raw context included\._/);
+  // An empty "Raw Context Appendix (0 messages)" block is dead weight, so the
+  // section is not emitted at all when there is no raw context to show.
+  assert.doesNotMatch(out, /Raw Context Appendix/);
+  assert.doesNotMatch(out, /_No raw context included\._/);
 });
 
-test("formatToHandoffSkill: preamble and appendix are emitted even when markdown is empty", () => {
-  const out = formatToHandoffSkill({ ...baseInput, markdown: "" });
+test("formatToHandoffSkill: preamble is emitted even when markdown is empty", () => {
+  const out = formatToHandoffSkill({
+    ...baseInput,
+    markdown: "",
+    appendix: [{ role: "user", content: "end" }],
+  });
   assert.match(out, /# Context Handoff/);
   assert.match(out, /\*\*Source Agent:\*\*\s*Pi/);
   assert.match(out, /## Raw Context Appendix/);
