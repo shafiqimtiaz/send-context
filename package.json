@@ -35,7 +35,8 @@
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "release": "release-it"
   },
   "engines": {
     "node": ">=20"
@@ -46,6 +47,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "release-it": "^20.2.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   }
