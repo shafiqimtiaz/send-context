@@ -88,7 +88,7 @@ const APPENDIX_DEFAULT_RECENT = 10;
 export async function buildHandoff(args: BuildHandoffArgs): Promise<BuildHandoffResult> {
   const { workerHost, presetAgent, cwd, deps } = args;
   const p = deps.prompter;
-  p.intro("ctx-handoff export");
+  p.intro("ctx-handoff send");
 
   // 1. Pick the agent.
   const agentId = await resolveAgent(presetAgent, cwd, deps);
