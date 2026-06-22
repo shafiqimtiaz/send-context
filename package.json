@@ -1,6 +1,6 @@
 {
   "name": "ctx-handoff",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Agent-agnostic CLI to relay AI coding-agent session context between developers via an encrypted, ephemeral edge link.",
   "license": "MIT",
   "type": "commonjs",
