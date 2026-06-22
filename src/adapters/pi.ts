@@ -6,7 +6,6 @@ import {
   listJsonl,
   readJsonl,
   sessionTitle,
-  summarizeValue,
 } from "../core/session-store.js";
 
 /**
@@ -69,7 +68,7 @@ interface PiLine {
   message?: { role: string; content: PiPart[] };
 }
 
-interface PiPart {
+export interface PiPart {
   type: string;
   text?: string;
   name?: string;
@@ -84,17 +83,19 @@ function normalizeRole(role: string): SessionMessage["role"] {
   return "system"; // toolResult and anything else
 }
 
-function renderParts(content: PiPart[]): string {
+/**
+ * Render a Pi message's content array to text. Tool calls and thinking
+ * parts are intentionally dropped — they are noise for the receiving agent.
+ * Exported for unit testing.
+ */
+export function renderParts(content: PiPart[]): string {
   if (!Array.isArray(content)) return "";
   const out: string[] = [];
   for (const part of content) {
     if (part.type === "text" && part.text) {
       out.push(part.text);
-    } else if (part.type === "toolCall") {
-      const name = part.name ?? part.toolName ?? "tool";
-      out.push(`[tool: ${name}] ${summarizeValue(part.args ?? part.input)}`);
     }
-    // thinking parts are internal — skipped.
+    // toolCall and thinking parts are filtered out at the adapter level.
   }
   return out.join("\n").trim();
 }

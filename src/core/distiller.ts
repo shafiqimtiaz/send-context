@@ -1,33 +1,65 @@
-import { jsonrepair } from "jsonrepair";
 import { SessionMessage, SessionRef } from "../adapters/types.js";
-import { HandoffSections } from "./formatter.js";
 
 /**
- * Optional Gemini pass that distills a raw session into the structured
- * Context Handoff sections, so the sender ships a dense brief instead of
- * noisy chat logs. Uses Google's OpenAI-compatible Chat Completions endpoint,
- * so no SDK is needed — just Node's built-in fetch.
+ * Optional Gemini pass that distills a raw session into a verbose Markdown
+ * handoff brief, so the sender ships a dense document instead of noisy chat
+ * logs. Uses Google's OpenAI-compatible Chat Completions endpoint, so no SDK
+ * is needed — just Node's built-in fetch.
+ *
+ * The output is free-form Markdown with no fixed schema. Gemini decides the
+ * structure; the model is told to preserve paths, commands, errors, and
+ * identifiers verbatim.
  */
 const GEMINI_ENDPOINT =
   "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
 
-const SYSTEM_PROMPT = `You distill one or more AI coding-agent sessions into a dense handoff brief for another developer's agent. The input is a single transcript with one or more session blocks separated by '### === SESSION n: <title> (N msgs) ===' markers. Strip conversational noise; keep only what the receiving agent needs to continue. Be concrete and terse.
+export const SYSTEM_PROMPT = `You are writing a verbose handoff brief for another developer's AI coding agent. The
+input is a full session transcript (one or more merged sessions, separated by
+\`### === SESSION n: <title> (N msgs) ===\` markers). Tool calls, thinking, and chat
+mechanics are already filtered out — what you see is the substance.
 
-The merged sessions may cover a single coherent thread OR multiple distinct topics. Detect which it is. When the sessions cover 2+ distinct topics, populate "topics" with the topic names (in order of appearance) and structure the five narrative fields so each topic's content is grouped under a '### <Topic>' sub-header. When the sessions are a single coherent thread, omit "topics" and write the fields as a single thread.
+Write a long-form Markdown brief. Begin directly with the brief itself — do not
+wrap in JSON, do not add a preamble.
 
-Respond with ONLY a JSON object of this exact shape:
-{
-  "topics": ["topic name 1", "topic name 2"],
-  "objective": "the primary goal, one or two sentences — composite when topics is present",
-  "currentState": "where things stand right now and any blockers — composite when topics is present",
-  "completedSteps": "what is already done — one '-' bullet per line, optionally grouped by '### <Topic>'",
-  "failedApproaches": "approaches that were tried and did not work and must not be retried — '-' bullets, or 'None.'",
-  "nextSteps": "the concrete next actions the receiving agent should take — '-' bullets, optionally grouped by '### <Topic>'"
-}
+Structure:
+- Open with a short paragraph in the user's own words describing the original
+  task or goal. Quote the first user message verbatim when it is concise.
+- Then write detailed sections, in whatever order fits the work: what was tried,
+  what worked, what errored (with exact error messages in code fences), the
+  current state with file paths and exact identifiers, a concrete list of next
+  steps.
+- Use \`##\` for major sections and \`###\` for sub-topics when the session covers
+  multiple distinct threads. When the session is a single coherent thread, omit
+  the sub-headers.
+- Use code fences (triple backticks) for paths, commands, error messages, file
+  contents, and any verbatim technical detail. Use inline backticks for
+  identifiers, function names, and short snippets.
 
-Leave a field as an empty string only when the session genuinely lacks that information. Omit "topics" (or set it to []) when the sessions are a single coherent thread.`;
+Preservation rules:
+- Preserve file paths verbatim. Do not paraphrase \`src/core/foo.ts\` into "the
+  foo module".
+- Preserve command invocations verbatim, including flags and arguments. Do not
+  paraphrase \`npm run dev -- send --agent claude\` into "we ran the send
+  command".
+- Preserve error messages verbatim. Do not paraphrase "ENOENT: no such file or
+  directory" into "a missing-file error".
+- Preserve identifiers verbatim. Do not paraphrase function or variable names.
+- Preserve ticket numbers, PR numbers, commit hashes, and URLs verbatim.
+
+Length:
+- Be verbose. The receiving agent needs enough detail to continue without
+  re-reading the source session. A short task may produce a 300-word brief; a
+  complex multi-session task may produce 2000 words or more.
+
+What to exclude:
+- Do not summarize tool calls or thinking.
+- Do not include pleasantries, "I will now…", "Let me…", or other chat
+  mechanics.
+- Do not add meta-commentary like "The user asked…". Quote the user directly.
+
+Output ONLY the brief. No JSON, no commentary, no preamble.`;
 
 export function geminiAvailable(): boolean {
   return Boolean(process.env.GEMINI_API_KEY);
@@ -57,10 +89,14 @@ export function buildTranscript(messages: SessionMessage[], sessions: SessionRef
   return blocks.join("\n\n");
 }
 
+/**
+ * Distill a raw session into a verbose Markdown handoff brief via Gemini.
+ * Returns the raw markdown string; no JSON parsing, no schema validation.
+ */
 export async function distillSession(
   messages: SessionMessage[],
   sessions: SessionRef[] = [],
-): Promise<HandoffSections> {
+): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set.");
   const model = process.env.GEMINI_MODEL ?? DEFAULT_MODEL;
@@ -81,7 +117,6 @@ export async function distillSession(
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: `Distill this session:\n\n${transcript}` },
       ],
-      response_format: { type: "json_object" },
       temperature: 0.2,
     }),
   });
@@ -96,61 +131,5 @@ export async function distillSession(
   const content = data.choices?.[0]?.message?.content;
   if (!content) throw new Error("Gemini returned no content.");
 
-  return parseSections(content);
-}
-
-export function parseSections(content: string): HandoffSections {
-  const obj = JSON.parse(extractJson(content)) as Partial<HandoffSections>;
-  return {
-    objective: str(obj.objective),
-    currentState: str(obj.currentState),
-    completedSteps: str(obj.completedSteps),
-    failedApproaches: str(obj.failedApproaches),
-    nextSteps: str(obj.nextSteps),
-    topics: Array.isArray(obj.topics) ? obj.topics.map((t) => str(t)).filter((t) => t.length > 0) : undefined,
-  };
-}
-
-// Exported for unit testing.
-export const __test__ = { parseSections };
-
-function extractJson(content: string): string {
-  const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const body = fenced ? fenced[1].trim() : content;
-
-  // Isolate the JSON from any surrounding prose, then let jsonrepair fix the
-  // common ways models still mangle it: trailing commas, single quotes,
-  // unquoted keys, truncation (missing closing brackets), and so on.
-  const start = body.indexOf("{");
-  const candidate =
-    start === -1 ? body : (firstBalancedObject(body) ?? body.slice(start));
-  return jsonrepair(candidate);
-}
-
-// Return the first brace-balanced JSON object, ignoring any prose or extra
-// objects the model appends after it (thinking models often do). Tracks string
-// literals and escapes so braces inside strings don't throw off the depth count.
-function firstBalancedObject(text: string): string | null {
-  const start = text.indexOf("{");
-  if (start === -1) return null;
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-  for (let i = start; i < text.length; i++) {
-    const ch = text[i];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (ch === "\\") escaped = true;
-      else if (ch === '"') inString = false;
-      continue;
-    }
-    if (ch === '"') inString = true;
-    else if (ch === "{") depth++;
-    else if (ch === "}" && --depth === 0) return text.slice(start, i + 1);
-  }
-  return null;
-}
-
-function str(v: unknown): string {
-  return typeof v === "string" ? v.trim() : "";
+  return content;
 }

@@ -1,6 +1,5 @@
 import { AgentAdapter, SessionMessage, SessionRef } from "./types.js";
 import { run, commandExists } from "../core/exec.js";
-import { summarizeValue } from "../core/session-store.js";
 
 /**
  * OpenCode adapter.
@@ -98,23 +97,25 @@ interface OpenCodeExport {
   }>;
 }
 
-interface OpenCodePart {
+export interface OpenCodePart {
   type: string;
   text?: string;
   tool?: string;
   state?: { input?: unknown; output?: unknown };
 }
 
-function renderParts(parts: OpenCodePart[]): string {
+/**
+ * Render an OpenCode message's parts to text. Tool parts and reasoning
+ * parts are filtered out at the adapter level — they are noise for the
+ * receiving agent. Exported for unit testing.
+ */
+export function renderParts(parts: OpenCodePart[]): string {
   const out: string[] = [];
   for (const part of parts) {
     if (part.type === "text" && part.text) {
       out.push(part.text);
-    } else if (part.type === "tool") {
-      const name = part.tool ?? "tool";
-      out.push(`[tool: ${name}] ${summarizeValue(part.state?.input)}`);
     }
-    // reasoning / step-start / step-finish are skipped.
+    // tool, reasoning, step-start, step-finish parts are filtered out.
   }
   return out.join("\n").trim();
 }

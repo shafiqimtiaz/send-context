@@ -220,6 +220,48 @@ test("buildReceiverBrief with confirmed injection returns spawn payload", async 
   assert.match(result.spawnInjection!.args[0], /SYSTEM CONTEXT INJECTION/);
 });
 
+test("buildReceiverBrief injection preamble does NOT reference the old fixed-schema section names", async () => {
+  // The dynamic redesign removed the 5-field schema. The injection preamble
+  // must not tell the agent to "avoid Failed Approaches" or "acknowledge
+  // Current State" — those assume a fixed schema that no longer exists.
+  const cwd = mkdtempSync(join(tmpdir(), "ctx-handoff-test-"));
+  const { deps, fake } = makeDeps();
+  fake.p.answers["select:Which coding agent to hand off to?"] = "pi" as AgentId;
+  fake.p.answers["confirm:Launch pi with this handoff injected?"] = true;
+  deps.resolveCwd = () => cwd;
+
+  const result = await buildReceiverBrief({
+    decrypted: "# Brief",
+    userRequest: "continue",
+    deps,
+  });
+
+  const injection = result.spawnInjection!.args[0];
+  assert.doesNotMatch(injection, /Completed Steps/);
+  assert.doesNotMatch(injection, /Failed Approaches/);
+  assert.doesNotMatch(injection, /Current State/);
+  assert.doesNotMatch(injection, /Next Steps/);
+});
+
+test("buildReceiverBrief injection preamble describes the brief as a verbose Markdown document", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "ctx-handoff-test-"));
+  const { deps, fake } = makeDeps();
+  fake.p.answers["select:Which coding agent to hand off to?"] = "pi" as AgentId;
+  fake.p.answers["confirm:Launch pi with this handoff injected?"] = true;
+  deps.resolveCwd = () => cwd;
+
+  const result = await buildReceiverBrief({
+    decrypted: "# Brief",
+    userRequest: "continue",
+    deps,
+  });
+
+  const injection = result.spawnInjection!.args[0];
+  // The new preamble frames the input as a verbose Markdown handoff.
+  assert.match(injection, /Context Handoff Document/);
+  assert.match(injection, /continue the work/i);
+});
+
 test("buildReceiverBrief falls back to default user request when none provided", async () => {
   const cwd = mkdtempSync(join(tmpdir(), "ctx-handoff-test-"));
   const { deps, fake } = makeDeps();

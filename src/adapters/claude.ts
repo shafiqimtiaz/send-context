@@ -6,7 +6,6 @@ import {
   listJsonl,
   readJsonl,
   sessionTitle,
-  summarizeValue,
 } from "../core/session-store.js";
 
 /**
@@ -68,7 +67,7 @@ interface ClaudeLine {
   message?: { role: string; content: string | ClaudePart[] };
 }
 
-interface ClaudePart {
+export interface ClaudePart {
   type: string;
   text?: string;
   name?: string;
@@ -76,7 +75,12 @@ interface ClaudePart {
   content?: unknown;
 }
 
-function renderContent(content: string | ClaudePart[]): string {
+/**
+ * Render Claude's message content to text. Tool calls and tool results are
+ * filtered out at the adapter level — they are noise for the receiving
+ * agent. Exported for unit testing.
+ */
+export function renderContent(content: string | ClaudePart[]): string {
   if (typeof content === "string") return content.trim();
   if (!Array.isArray(content)) return "";
 
@@ -84,22 +88,8 @@ function renderContent(content: string | ClaudePart[]): string {
   for (const part of content) {
     if (part.type === "text" && part.text) {
       out.push(part.text);
-    } else if (part.type === "tool_use") {
-      out.push(`[tool: ${part.name ?? "tool"}] ${summarizeValue(part.input)}`);
-    } else if (part.type === "tool_result") {
-      out.push(`[tool result] ${summarizeValue(extractToolResult(part.content))}`);
     }
+    // tool_use and tool_result parts are filtered out at the adapter level.
   }
   return out.join("\n").trim();
-}
-
-function extractToolResult(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((p) => (p && typeof p === "object" && "text" in p ? (p as { text: string }).text : ""))
-      .filter(Boolean)
-      .join("\n");
-  }
-  return summarizeValue(content);
 }

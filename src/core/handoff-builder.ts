@@ -2,9 +2,10 @@ import { AgentAdapter, SessionMessage, SessionRef } from "../adapters/types.js";
 import { AgentId } from "../adapters/index.js";
 import { EncryptedPayload } from "./crypto.js";
 import { encodeLink, HandoffLink } from "./link.js";
+import { encodePayload } from "./wire.js";
 
 /**
- * The handoff-construction pipeline, extracted from commands/export.ts so it
+ * The handoff-construction pipeline, extracted from commands/send.ts so it
  * can be exercised without a TTY, with a scripted Prompter, or by another
  * caller (e.g. a future `ctx-handoff doctor`).
  *
@@ -51,19 +52,18 @@ export interface HandoffBuilderDeps {
   uploadPayload: (workerHost: string, payload: EncryptedPayload) => Promise<string>;
   encodeLink: (link: HandoffLink) => string;
   geminiAvailable: () => boolean;
-  distillSession: (messages: SessionMessage[], sessions: SessionRef[]) => Promise<{
-    objective: string; currentState: string; completedSteps: string;
-    failedApproaches: string; nextSteps: string; topics?: string[];
-  }>;
+  /**
+   * Distill the merged messages into a verbose Markdown handoff brief.
+   * Returns the raw markdown string. There is no fixed schema; the model
+   * decides the structure.
+   */
+  distillSession: (messages: SessionMessage[], sessions: SessionRef[]) => Promise<string>;
   formatToHandoffSkill: (input: {
     sourceAgent: string;
     timestamp: string;
     appendix: SessionMessage[];
     allMessages: SessionMessage[];
-    sections?: Partial<{
-      objective: string; currentState: string; completedSteps: string;
-      failedApproaches: string; nextSteps: string; topics?: string[];
-    }>;
+    markdown: string;
   }) => string;
   isStdoutTty: boolean;
 }
@@ -130,42 +130,50 @@ export async function buildHandoff(args: BuildHandoffArgs): Promise<BuildHandoff
   }
 
   // 4. Build the brief: distill if available, otherwise manual curation.
-  let sections: Partial<{
-    objective: string; currentState: string; completedSteps: string;
-    failedApproaches: string; nextSteps: string;
-  }>;
+  let markdown: string;
   let appendix: SessionMessage[];
   let source: BuildHandoffResult["source"];
 
   if (deps.geminiAvailable()) {
     spin.start("Distilling session with Gemini");
     try {
-      sections = await deps.distillSession(messages, chosen);
+      markdown = await deps.distillSession(messages, chosen);
       appendix = [];
       source = "distilled";
       spin.stop("Distilled into a handoff brief.");
     } catch (err) {
       spin.stop("Distillation failed — falling back to manual.");
       p.log.warn((err as Error).message);
-      ({ sections, appendix } = await runManual(messages, p));
+      ({ markdown, appendix } = await runManual(messages, p));
       source = "manual";
     }
   } else {
-    ({ sections, appendix } = await runManual(messages, p));
+    ({ markdown, appendix } = await runManual(messages, p));
     source = "manual";
   }
 
   // 5. Render and encrypt.
-  const markdown = deps.formatToHandoffSkill({
+  const rendered = deps.formatToHandoffSkill({
     sourceAgent: adapter.getName(),
     timestamp: new Date().toISOString(),
     allMessages: messages,
     appendix,
-    sections,
+    markdown,
+  });
+
+  // 5b. Wrap in the v2 wire-format envelope. The payload that goes onto the
+  // wire is a JSON object with version + source metadata + the rendered
+  // Markdown. Older v1 payloads (bare Markdown) are no longer accepted.
+  const capturedAt = new Date().toISOString();
+  const envelope = encodePayload({
+    sourceAgent: adapter.getName(),
+    timestamp: capturedAt,
+    markdown: rendered,
+    ...(appendix.length > 0 ? { appendix } : {}),
   });
 
   const password = await resolvePassword(args.password, p);
-  const payload = deps.encrypt(markdown, password);
+  const payload = deps.encrypt(envelope, password);
 
   // 6. Upload and emit link.
   spin.start("Uploading encrypted handoff");
@@ -245,25 +253,28 @@ async function extractMerged(
   return messages;
 }
 
+interface ManualSections {
+  objective?: string;
+  currentState?: string;
+  completedSteps?: string;
+  failedApproaches?: string;
+  nextSteps?: string;
+}
+
 async function runManual(
   messages: SessionMessage[],
   p: Prompter,
-): Promise<{
-  sections: Partial<{
-    objective: string; currentState: string; completedSteps: string;
-    failedApproaches: string; nextSteps: string;
-  }>;
-  appendix: SessionMessage[];
-}> {
+): Promise<{ markdown: string; appendix: SessionMessage[] }> {
   const sections = await promptSections(p);
   const appendix = await curateAppendix(messages, p);
-  return { sections, appendix };
+  // The manual flow is the legacy 5-field fallback for when Gemini is
+  // unavailable. Render those fields into a fixed-schema Markdown body so
+  // the formatter has something to wrap the preamble + appendix around.
+  const markdown = renderLegacySections(sections);
+  return { markdown, appendix };
 }
 
-async function promptSections(p: Prompter): Promise<Partial<{
-  objective: string; currentState: string; completedSteps: string;
-  failedApproaches: string; nextSteps: string;
-}>> {
+async function promptSections(p: Prompter): Promise<ManualSections> {
   const wants = await p.confirm({
     message: "Add a written summary (objective, blockers, next steps)? Recommended.",
     initialValue: true,
@@ -271,10 +282,7 @@ async function promptSections(p: Prompter): Promise<Partial<{
   if (isCancelValue(wants)) throw new CancelledError();
   if (!wants) return {};
 
-  const fields: Array<[keyof {
-    objective: string; currentState: string; completedSteps: string;
-    failedApproaches: string; nextSteps: string;
-  }, string]> = [
+  const fields: Array<[keyof ManualSections, string]> = [
     ["objective", "Primary objective"],
     ["currentState", "Current state & blockers"],
     ["completedSteps", "Completed steps (one per line)"],
@@ -282,16 +290,41 @@ async function promptSections(p: Prompter): Promise<Partial<{
     ["nextSteps", "Next steps for the receiver"],
   ];
 
-  const sections: Partial<{
-    objective: string; currentState: string; completedSteps: string;
-    failedApproaches: string; nextSteps: string;
-  }> = {};
+  const sections: ManualSections = {};
   for (const [key, label] of fields) {
     const value = await p.text({ message: label, placeholder: "(optional, Enter to skip)" });
     if (isCancelValue(value)) throw new CancelledError();
     if (value.trim()) sections[key] = value.trim();
   }
   return sections;
+}
+
+function renderLegacySections(sections: ManualSections): string {
+  const NOT_SPECIFIED = "_Not specified by sender._";
+  const out: string[] = [];
+  const objective = sections.objective?.trim() || NOT_SPECIFIED;
+  const currentState = sections.currentState?.trim() || NOT_SPECIFIED;
+  const completedSteps = sections.completedSteps?.trim() || NOT_SPECIFIED;
+  const failedApproaches = sections.failedApproaches?.trim() || NOT_SPECIFIED;
+  const nextSteps = sections.nextSteps?.trim() || NOT_SPECIFIED;
+  out.push(
+    `## 1. Primary Objective`,
+    objective,
+    ``,
+    `## 2. Current State & Blockers`,
+    currentState,
+    ``,
+    `## 3. Completed Steps`,
+    completedSteps,
+    ``,
+    `## 4. Failed Approaches (Do Not Retry)`,
+    failedApproaches,
+    ``,
+    `## 5. Next Steps`,
+    nextSteps,
+    ``,
+  );
+  return out.join("\n");
 }
 
 async function curateAppendix(
@@ -335,12 +368,6 @@ function preview(content: string): string {
   return line.length > 80 ? `${line.slice(0, 80)}…` : line;
 }
 
-/**
- * In the real @clack/prompts adapter, the user-cancel sentinel is the
- * string `"clack:cancel"` (returned by `p.isCancel`). In tests, the FakePrompter
- * either returns scripted answers or throws CancelledError directly. This
- * helper guards against a "clack:cancel" string slipping through.
- */
 function isCancelValue(v: unknown): boolean {
   return typeof v === "string" && v === "clack:cancel";
 }

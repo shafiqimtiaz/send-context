@@ -1,80 +1,55 @@
 import { SessionMessage } from "../adapters/types.js";
 
 /**
- * The six human-authored sections of the Context Handoff Skill Standard. Any field the
- * sender does not provide falls back to a best-effort default derived from the
- * session, or an explicit "_Not specified_" marker.
- *
- * `topics` is set by the topic-aware distiller when the merged sessions cover
- * 2+ distinct topics. When present, the 5 narrative fields are expected to
- * carry `### <Topic>` sub-headers so the formatter can render topic sub-headings.
+ * A dynamic, free-form Markdown brief produced by the sender's Gemini
+ * distillation. There is no fixed schema — Gemini decides the structure,
+ * subject to the distiller's system prompt. The brief is passed through
+ * the formatter verbatim (preamble and appendix are added around it).
  */
-export interface HandoffSections {
-  objective: string;
-  currentState: string;
-  completedSteps: string;
-  failedApproaches: string;
-  nextSteps: string;
-  topics?: string[];
+export interface HandoffMarkdown {
+  markdown: string;
 }
 
 export interface HandoffInput {
   sourceAgent: string;
   timestamp: string;
+  /**
+   * The sender's verbose Markdown brief (Gemini output). Passed through
+   * the formatter verbatim. May be empty, in which case the preamble and
+   * appendix still render around nothing.
+   */
+  markdown: string;
   /** Messages the sender curated for the Raw Context Appendix. */
   appendix: SessionMessage[];
-  /** Full message list, used only to derive defaults. */
+  /**
+   * Full message list, used only to derive the original-task line in the
+   * preamble (the first non-empty user message, truncated to 200 chars).
+   */
   allMessages: SessionMessage[];
-  sections?: Partial<HandoffSections>;
 }
 
 const NOT_SPECIFIED = "_Not specified by sender._";
 
 export function formatToHandoffSkill(input: HandoffInput): string {
-  const { sourceAgent, timestamp, appendix, allMessages, sections = {} } = input;
+  const { sourceAgent, timestamp, appendix, allMessages, markdown } = input;
 
   const firstUser = allMessages.find((m) => m.role === "user")?.content ?? "";
   const originalTask = firstLine(firstUser) || NOT_SPECIFIED;
 
-  const objective = sections.objective?.trim() || originalTask;
-  const currentState = sections.currentState?.trim() || NOT_SPECIFIED;
-  const completedSteps = sections.completedSteps?.trim() || NOT_SPECIFIED;
-  const failedApproaches = sections.failedApproaches?.trim() || NOT_SPECIFIED;
-  const nextSteps = sections.nextSteps?.trim() || NOT_SPECIFIED;
-  const topics = sections.topics?.filter((t) => t.trim()) ?? [];
-
   const out: string[] = [
-    `# Context Handoff Document`,
+    `# Context Handoff`,
     `**Source Agent:** ${sourceAgent}`,
     `**Timestamp:** ${timestamp}`,
     `**Original Task:** ${originalTask}`,
     ``,
   ];
 
-  if (topics.length > 0) {
-    out.push(`## Topics`, ...topics.map((t) => `- ${t}`), ``);
+  // The sender's dynamic brief — verbatim. No fixed section structure.
+  if (markdown) {
+    out.push(markdown.trim(), ``);
   }
 
-  out.push(
-    `## 1. Primary Objective`,
-    objective,
-    ``,
-    `## 2. Current State & Blockers`,
-    currentState,
-    ``,
-    `## 3. Completed Steps`,
-    completedSteps,
-    ``,
-    `## 4. Failed Approaches (Do Not Retry)`,
-    failedApproaches,
-    ``,
-    `## 5. Next Steps`,
-    nextSteps,
-    ``,
-    `## 6. Raw Context Appendix`,
-    renderAppendix(appendix),
-    ``,
-  );
+  out.push(`## Raw Context Appendix`, renderAppendix(appendix), ``);
 
   return out.join("\n");
 }

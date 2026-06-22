@@ -177,9 +177,10 @@ export async function buildReceiverBrief(
 function buildInjection(markdown: string, userRequest: string): string {
   const preamble =
     `SYSTEM CONTEXT INJECTION:\n` +
-    `You are resuming a task. You have been provided with an Context Handoff Document.\n` +
-    `Read it carefully. Do not repeat "Completed Steps". Avoid "Failed Approaches".\n` +
-    `Acknowledge the "Current State" and immediately begin working on the "Next Steps".`;
+    `You are resuming a task. You have been provided with a Context Handoff Document ` +
+    `written as a verbose Markdown brief — structure, headings, and section names are ` +
+    `decided by the sender, not by a fixed schema. Read the brief carefully and ` +
+    `continue the work.`;
   const req = userRequest.trim() || "Continue the work described above.";
   return `${preamble}\n\n${markdown}\n\nUSER REQUEST:\n${req}`;
 }

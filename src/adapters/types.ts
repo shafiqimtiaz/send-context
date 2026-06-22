@@ -1,3 +1,11 @@
+/**
+ * A single message in a coding-agent session.
+ *
+ * `content` is the rendered text after adapter-side processing. By contract
+ * tool calls (and any equivalent in the agent's native format) are NOT
+ * represented in `content` — adapters must drop them before returning. This
+ * keeps noise out of the distillation pipeline and out of the wire payload.
+ */
 export interface SessionMessage {
   role: "user" | "assistant" | "system";
   content: string;

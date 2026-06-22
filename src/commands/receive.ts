@@ -3,6 +3,7 @@ import * as p from "@clack/prompts";
 import { decodeLink } from "../core/link.js";
 import { downloadPayload } from "../core/transport.js";
 import { decrypt } from "../core/crypto.js";
+import { decodePayload } from "../core/wire.js";
 import {
   buildReceiverBrief,
   CancelledError,
@@ -26,6 +27,7 @@ import { spawn as spawnChild } from "node:child_process";
 export interface RunReceiveDeps {
   downloadPayload: (workerHost: string, id: string) => Promise<unknown>;
   decrypt: (payload: unknown, password: string) => string;
+  decodePayload: (json: string) => { version: 2; source: { agent: string; capturedAt: string }; markdown: string };
   buildReceiverBrief: typeof buildReceiverBrief;
   distillToHtmlAndMarkdown: typeof distillToHtmlAndMarkdown;
   receiverGeminiAvailable: () => boolean;
@@ -34,6 +36,7 @@ export interface RunReceiveDeps {
   resolveCwd: () => string;
   resolveTmpdir: () => string;
   now: () => number;
+  getPassword: () => Promise<string>;
   stdinIsTty: boolean;
   stdoutWrite: (s: string) => void;
 }
@@ -41,9 +44,18 @@ export interface RunReceiveDeps {
 export const defaultReceiveDeps: RunReceiveDeps = {
   downloadPayload: (workerHost, id) => downloadPayload(workerHost, id),
   decrypt: (payload, password) => decrypt(payload as never, password),
+  decodePayload: (json) => decodePayload(json),
   buildReceiverBrief,
   distillToHtmlAndMarkdown,
   receiverGeminiAvailable,
+  getPassword: async () => {
+    const password = await p.password({ message: "Password:" });
+    if (p.isCancel(password)) {
+      p.cancel("Cancelled.");
+      throw new CancelledError();
+    }
+    return password;
+  },
   openInBrowser: async (path) => {
     const cmd = platform === "darwin" ? "open" : platform === "win32" ? "start" : "xdg-open";
     await new Promise<void>((resolve, reject) => {
@@ -107,19 +119,30 @@ export async function runReceive(
   }
   spin.stop("Downloaded.");
 
-  const password = await p.password({ message: "Password:" });
-  if (p.isCancel(password)) {
-    p.cancel("Cancelled.");
+  let password: string;
+  try {
+    password = await deps.getPassword();
+  } catch {
     process.exitCode = 130;
     return;
   }
 
   let markdown: string;
   try {
-    markdown = deps.decrypt(payload, password);
+    const decrypted = deps.decrypt(payload, password);
+    // Parse the v2 wire-format envelope. v1 payloads error here with the
+    // "ask the sender to upgrade" message.
+    const envelope = deps.decodePayload(decrypted);
+    markdown = envelope.markdown;
   } catch (err) {
     const msg = (err as Error).message;
-    p.cancel(msg === "INVALID_PASSWORD" ? "Invalid password." : msg);
+    if (msg === "INVALID_PASSWORD") {
+      p.cancel("Invalid password.");
+    } else if (/older format|ask the sender to upgrade|newer than this build/i.test(msg)) {
+      p.cancel(msg);
+    } else {
+      p.cancel(msg);
+    }
     process.exitCode = 1;
     return;
   }

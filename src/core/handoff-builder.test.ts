@@ -64,15 +64,9 @@ function baseDeps(p: Prompter, adapter: AgentAdapter, overrides: Partial<Handoff
     encodeLink: ({ workerHost, id }: HandoffLink) =>
       `ctx-handoff://${workerHost}/${id}`,
     geminiAvailable: () => false,
-    distillSession: async () => ({
-      objective: "",
-      currentState: "",
-      completedSteps: "",
-      failedApproaches: "",
-      nextSteps: "",
-    }),
+    distillSession: async () => "# Distilled Brief\n\nBody.\n",
     formatToHandoffSkill: (input) =>
-      `mock-doc:${input.sections.objective ?? ""}`,
+      `mock-doc:source=${input.sourceAgent}:md=${input.markdown}`,
     isStdoutTty: true,
   };
   return { ...deps, ...overrides };
@@ -81,7 +75,6 @@ function baseDeps(p: Prompter, adapter: AgentAdapter, overrides: Partial<Handoff
 // ----- Tests ---------------------------------------------------------------
 
 test("harness: smoke test the test doubles", () => {
-  // Sanity: the doubles behave as expected.
   const p = new FakePrompter();
   assert.equal(p.introCalls.length, 0);
   p.intro("x");
@@ -102,13 +95,12 @@ test("builder: preset agent skips detection, returns a link", async () => {
   });
 
   assert.equal(result.link, "ctx-handoff://h.deno.net/abc123");
-  // Manual flow was used (no gemini), so note/link was called with the link.
   assert.ok(p.noteCalls.some((n) => n.msg.startsWith("ctx-handoff://")));
 });
 
 test("builder: detects multiple agents and asks user to pick", async () => {
   const p = new FakePrompter();
-  p.selectAnswer = "pi"; // user picked pi
+  p.selectAnswer = "pi";
   const adapter = fakeAdapter();
   const deps = baseDeps(p, adapter, {
     detectAgents: () => ["pi", "claude"],
@@ -141,7 +133,6 @@ test("builder: non-TTY auto-selects newest session without prompting", async () 
     deps,
   });
   assert.equal(result.link, "ctx-handoff://h.deno.net/abc123");
-  // No multiselect was shown — fake's multiselectAnswer stays [].
   assert.deepEqual(p.multiselectAnswer, []);
 });
 
@@ -162,22 +153,21 @@ test("builder: empty session list throws a no-sessions error", async () => {
   );
 });
 
-test("builder: distill path uses Gemini and skips manual prompts", async () => {
+// ----- Distill path --------------------------------------------------------
+
+test("builder: distill path uses Gemini and returns the distilled markdown verbatim", async () => {
   const p = new FakePrompter();
   let distillCalled = false;
   const adapter = fakeAdapter();
   const deps = baseDeps(p, adapter, {
     geminiAvailable: () => true,
-    distillSession: async () => {
+    distillSession: async (_messages, sessions) => {
       distillCalled = true;
-      return {
-        objective: "Distilled",
-        currentState: "",
-        completedSteps: "",
-        failedApproaches: "",
-        nextSteps: "",
-      };
+      assert.ok(sessions.length > 0, "sessions passed to distillSession");
+      return "# Distilled\n\nThe user wants to refactor the worker.\n";
     },
+    formatToHandoffSkill: (input) =>
+      `MOCK:${input.markdown}`,
   });
 
   await buildHandoff({
@@ -190,6 +180,33 @@ test("builder: distill path uses Gemini and skips manual prompts", async () => {
   assert.equal(distillCalled, true);
   // Manual flow's text/confirm prompts were NOT invoked.
   assert.equal(p.textAnswer, "");
+});
+
+test("builder: distillSession return type is a string (dynamic markdown, not structured sections)", async () => {
+  // Compile-time check + runtime check: the distill branch must accept a
+  // string from distillSession and pass it to formatToHandoffSkill as
+  // `markdown`, not as `sections`.
+  const p = new FakePrompter();
+  const adapter = fakeAdapter();
+  const distilled = "# Verbose Brief\n\n`src/core/foo.ts` line 42.\n";
+  let capturedMarkdown: string | undefined;
+  const deps = baseDeps(p, adapter, {
+    geminiAvailable: () => true,
+    distillSession: async () => distilled,
+    formatToHandoffSkill: (input) => {
+      capturedMarkdown = input.markdown;
+      return `OUT:${input.markdown}`;
+    },
+  });
+
+  await buildHandoff({
+    workerHost: "h.deno.net",
+    password: "secret",
+    presetAgent: "pi",
+    cwd: "/tmp",
+    deps,
+  });
+  assert.equal(capturedMarkdown, distilled);
 });
 
 test("builder: distill failure falls back to manual flow with a warning", async () => {
@@ -215,7 +232,6 @@ test("builder: distill failure falls back to manual flow with a warning", async 
 
 test("builder: user cancel during section prompt throws CancelledError", async () => {
   const baseP = new FakePrompter();
-  // FakePrompter doesn't model cancel — clone it with confirm() that throws.
   const cancelPrompter: Prompter = {
     intro: (m) => baseP.intro(m),
     outro: (m) => baseP.outro(m),
@@ -252,7 +268,7 @@ test("builder: password too short via env var throws", async () => {
   await assert.rejects(
     buildHandoff({
       workerHost: "h.deno.net",
-      password: "abc", // < 4 chars
+      password: "abc",
       presetAgent: "pi",
       cwd: "/tmp",
       deps,

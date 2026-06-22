@@ -1,132 +1,103 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatToHandoffSkill } from "./formatter.js";
-import { SessionMessage } from "../adapters/types.js";
+import { formatToHandoffSkill, type HandoffInput } from "./formatter.js";
+import type { SessionMessage } from "../adapters/types.js";
 
-const messages: SessionMessage[] = [
-  { role: "user", content: "Refactor the worker into a typed module" },
-  { role: "assistant", content: "Plan: split renderParts into a PartRenderer" },
-];
+const baseInput: HandoffInput = {
+  sourceAgent: "Pi",
+  timestamp: "2026-06-22T12:00:00.000Z",
+  allMessages: [{ role: "user", content: "Refactor the distiller prompts." }],
+  appendix: [],
+  markdown: "# Brief\n\nOriginal task in user's words.\n",
+};
 
-test("formatter: renders all six sections with full input", () => {
-  const out = formatToHandoffSkill({
-    sourceAgent: "Pi",
-    timestamp: "2025-01-01T00:00:00.000Z",
-    allMessages: messages,
-    appendix: messages,
-    sections: {
-      objective: "Make the worker type-safe",
-      currentState: "Drafted",
-      completedSteps: "- Skeleton",
-      failedApproaches: "- None",
-      nextSteps: "- Wire to HandoffBuilder",
-    },
-  });
-
-  assert.match(out, /^# Context Handoff Document/);
-  assert.match(out, /\*\*Source Agent:\*\* Pi/);
-  assert.match(out, /\*\*Timestamp:\*\* 2025-01-01T00:00:00\.000Z/);
-  assert.match(out, /## 1\. Primary Objective/);
-  assert.match(out, /Make the worker type-safe/);
-  assert.match(out, /## 2\. Current State & Blockers/);
-  assert.match(out, /## 3\. Completed Steps/);
-  assert.match(out, /## 4\. Failed Approaches \(Do Not Retry\)/);
-  assert.match(out, /## 5\. Next Steps/);
-  assert.match(out, /## 6\. Raw Context Appendix/);
+test("formatToHandoffSkill: renders fixed preamble before the markdown body", () => {
+  const out = formatToHandoffSkill(baseInput);
+  // The preamble lines must appear, in order, before the markdown body.
+  const preambleIdx = out.indexOf("# Context Handoff");
+  const markdownIdx = out.indexOf("# Brief");
+  assert.ok(preambleIdx >= 0, "preamble header present");
+  assert.ok(markdownIdx >= 0, "markdown body present");
+  assert.ok(preambleIdx < markdownIdx, "preamble precedes markdown");
 });
 
-test("formatter: missing sections fall back to '_Not specified by sender._'", () => {
-  const out = formatToHandoffSkill({
-    sourceAgent: "Claude Code",
-    timestamp: "2025-01-01T00:00:00.000Z",
-    allMessages: messages,
-    appendix: [],
-    sections: {},
-  });
-
-  // Objective falls back to first user message (not the not-specified marker).
-  assert.match(out, /Refactor the worker into a typed module/);
-  // The other four sections default to the not-specified marker.
-  const occurrences = out.match(/_Not specified by sender\._/g) ?? [];
-  assert.equal(occurrences.length, 4);
+test("formatToHandoffSkill: includes source agent, timestamp, and original task in preamble", () => {
+  const out = formatToHandoffSkill(baseInput);
+  assert.match(out, /\*\*Source Agent:\*\*\s*Pi/);
+  assert.match(out, /\*\*Timestamp:\*\*\s*2026-06-22T12:00:00\.000Z/);
+  assert.match(out, /\*\*Original Task:\*\*\s*Refactor the distiller prompts\./);
 });
 
-test("formatter: empty appendix renders the empty-appendix marker", () => {
+test("formatToHandoffSkill: original task falls back to '_Not specified by sender._' when no user message", () => {
+  const out = formatToHandoffSkill({ ...baseInput, allMessages: [] });
+  assert.match(out, /\*\*Original Task:\*\*\s*_Not specified by sender\._/);
+});
+
+test("formatToHandoffSkill: original task truncates very long first lines", () => {
+  const longLine = "x".repeat(500);
   const out = formatToHandoffSkill({
-    sourceAgent: "Pi",
-    timestamp: "2025-01-01T00:00:00.000Z",
-    allMessages: messages,
-    appendix: [],
-    sections: {},
+    ...baseInput,
+    allMessages: [{ role: "user", content: longLine }],
   });
+  // Truncated to 200 chars + ellipsis.
+  const match = out.match(/\*\*Original Task:\*\*\s*(.+)/);
+  assert.ok(match, "original task line present");
+  assert.ok(match[1].length <= 210, "truncated to <=210 chars");
+  assert.match(match[1], /…$/);
+});
+
+test("formatToHandoffSkill: does NOT inject any fixed numbered section headers (## 1., ## 2., etc.)", () => {
+  const out = formatToHandoffSkill(baseInput);
+  // The old formatter emitted ## 1. Primary Objective, ## 2. Current State & Blockers, etc.
+  // Dynamic markdown is the only source of structure now.
+  assert.doesNotMatch(out, /##\s*1\.\s*Primary Objective/i);
+  assert.doesNotMatch(out, /##\s*2\.\s*Current State/i);
+  assert.doesNotMatch(out, /##\s*3\.\s*Completed Steps/i);
+  assert.doesNotMatch(out, /##\s*4\.\s*Failed Approaches/i);
+  assert.doesNotMatch(out, /##\s*5\.\s*Next Steps/i);
+  assert.doesNotMatch(out, /##\s*6\.\s*Raw Context Appendix/i);
+});
+
+test("formatToHandoffSkill: passes the markdown body through verbatim (no transformation)", () => {
+  const markdown = "# Handoff Brief: foo\n\n## Current State\n\n`src/core/distiller.ts` lines 1-50.\n\n```bash\nnpm run dev -- send\n```\n";
+  const out = formatToHandoffSkill({ ...baseInput, markdown });
+  // The exact markdown string appears in the output.
+  assert.ok(out.includes(markdown), "verbatim markdown body present");
+});
+
+test("formatToHandoffSkill: renders the appendix section when messages are provided", () => {
+  const appendix: SessionMessage[] = [
+    { role: "user", content: "I want to refactor the distiller." },
+    { role: "assistant", content: "Sure, let me look at the current prompt." },
+  ];
+  const out = formatToHandoffSkill({ ...baseInput, appendix });
+  assert.match(out, /## Raw Context Appendix/);
+  assert.match(out, /### USER\n\nI want to refactor the distiller\./);
+  assert.match(out, /### ASSISTANT\n\nSure, let me look at the current prompt\./);
+});
+
+test("formatToHandoffSkill: shows '_No raw context included._' when appendix is empty", () => {
+  const out = formatToHandoffSkill({ ...baseInput, appendix: [] });
+  assert.match(out, /## Raw Context Appendix/);
   assert.match(out, /_No raw context included\._/);
 });
 
-test("formatter: appendix renders messages as ### ROLE sections", () => {
-  const out = formatToHandoffSkill({
-    sourceAgent: "Pi",
-    timestamp: "2025-01-01T00:00:00.000Z",
-    allMessages: messages,
-    appendix: messages,
-    sections: {},
-  });
-  assert.match(out, /### USER\n\nRefactor the worker/);
-  assert.match(out, /### ASSISTANT\n\nPlan: split renderParts/);
-  assert.match(out, /\n---\n/); // separator between messages
+test("formatToHandoffSkill: preamble and appendix are emitted even when markdown is empty", () => {
+  const out = formatToHandoffSkill({ ...baseInput, markdown: "" });
+  assert.match(out, /# Context Handoff/);
+  assert.match(out, /\*\*Source Agent:\*\*\s*Pi/);
+  assert.match(out, /## Raw Context Appendix/);
 });
 
-test("formatter: objective falls back to first user line, trimmed and clipped", () => {
-  const longLine = "a".repeat(500);
+test("formatToHandoffSkill: markdown body appears between preamble and appendix", () => {
   const out = formatToHandoffSkill({
-    sourceAgent: "Pi",
-    timestamp: "t",
-    allMessages: [{ role: "user", content: longLine }],
-    appendix: [],
-    sections: {},
+    ...baseInput,
+    markdown: "## Middle\n\nbody\n",
+    appendix: [{ role: "user", content: "end" }],
   });
-  // The objective is the first line of the first user message, capped at 200 chars.
-  const m = out.match(/## 1\. Primary Objective\n([^\n]+)/);
-  assert.ok(m);
-  assert.ok(m[1].length <= 201); // 200 chars + ellipsis
-  assert.ok(m[1].endsWith("…"));
-});
-
-test("formatter: renders a Topics section when sections.topics is non-empty", () => {
-  const out = formatToHandoffSkill({
-    sourceAgent: "Pi",
-    timestamp: "2026-06-22T00:00:00.000Z",
-    allMessages: [{ role: "user", content: "First task" }],
-    appendix: [],
-    sections: {
-      topics: ["Refactor distiller", "Add Hindsight recall"],
-      objective: "Two workstreams",
-      currentState: "Refactor distiller: drafted\n\nAdd Hindsight recall: pending",
-      completedSteps: "### Refactor distiller\n- x\n\n### Add Hindsight recall\n- y",
-      failedApproaches: "None.",
-      nextSteps: "### Refactor distiller\n- a\n\n### Add Hindsight recall\n- b",
-    },
-  });
-  assert.match(out, /## Topics\n- Refactor distiller\n- Add Hindsight recall/);
-  assert.match(out, /### Refactor distiller\n- x/);
-  assert.match(out, /### Add Hindsight recall\n- y/);
-});
-
-test("formatter: omits the Topics section when topics is absent or empty", () => {
-  const out1 = formatToHandoffSkill({
-    sourceAgent: "Pi",
-    timestamp: "t",
-    allMessages: [{ role: "user", content: "x" }],
-    appendix: [],
-    sections: { objective: "Single thread" },
-  });
-  assert.doesNotMatch(out1, /## Topics/);
-
-  const out2 = formatToHandoffSkill({
-    sourceAgent: "Pi",
-    timestamp: "t",
-    allMessages: [{ role: "user", content: "x" }],
-    appendix: [],
-    sections: { topics: [], objective: "Single thread" },
-  });
-  assert.doesNotMatch(out2, /## Topics/);
+  const preambleIdx = out.indexOf("# Context Handoff");
+  const middleIdx = out.indexOf("## Middle");
+  const appendixIdx = out.indexOf("## Raw Context Appendix");
+  assert.ok(preambleIdx < middleIdx, "preamble before markdown");
+  assert.ok(middleIdx < appendixIdx, "markdown before appendix");
 });
