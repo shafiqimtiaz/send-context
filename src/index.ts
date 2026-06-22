@@ -6,10 +6,13 @@ import { AgentId } from "./adapters/index.js";
 
 const program = new Command();
 
+// Single source of truth: read the version release-it bumps in package.json.
+const { version } = require("../package.json") as { version: string };
+
 program
   .name("send-context")
   .description("Relay AI coding-agent session context between developers via an encrypted, ephemeral link.")
-  .version("0.1.1")
+  .version(version)
   .enablePositionalOptions();
 
 program
