@@ -15,8 +15,8 @@ The session is distilled into a structured **Context Handoff Skill** document, e
               │ extract + format                    inject prompt │
               ▼                                                   │
    ┌───────────────────────┐  encrypt                  decrypt  ┌────────────────────────┐
-   │  send-context export   │ ────────►  edge KV (24h) ───────► │  send-context receive   │
-   └───────────────────────┘         (ciphertext only)         └────────────────────────┘
+   │  send-context export  │ ────────►  edge KV (24h) ────────► │  send-context receive  │
+   └───────────────────────┘         (ciphertext only)          └────────────────────────┘
 ```
 
 ## Features
