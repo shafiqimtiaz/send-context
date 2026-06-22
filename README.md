@@ -2,18 +2,21 @@
 
 > Relay an AI coding-agent session from one developer to another through an encrypted, ephemeral link.
 
+[![npm version](https://img.shields.io/npm/v/send-context.svg)](https://www.npmjs.com/package/send-context)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+
 `send-context` is an agent-agnostic CLI for passing live context between AI coding agents — across machines, across people, across tools. A developer in one timezone exports their session; a teammate in another runs one command to pick up exactly where they left off, with the context injected straight into *their* agent.
 
 The session is distilled into a structured **Context Handoff Skill** document, encrypted on your machine, and stored behind a short-lived link. The transport layer only ever sees ciphertext.
 
 ```
-  pi / Claude Code / OpenCode                          pi / Claude Code / OpenCode
-            │                                                      ▲
-            │ extract + format                       inject prompt │
-            ▼                                                      │
-   ┌─────────────────┐   encrypt    send-context://…    decrypt   ┌─────────────────┐
-   │  send-context export │ ───────────►  edge KV (24h) ────────► │ send-context receive │
-   └─────────────────┘            (ciphertext only)          └─────────────────┘
+   pi · Claude Code · OpenCode                        pi · Claude Code · OpenCode
+              │                                                   ▲
+              │ extract + format                    inject prompt │
+              ▼                                                   │
+   ┌───────────────────────┐  encrypt                  decrypt  ┌────────────────────────┐
+   │  send-context export   │ ────────►  edge KV (24h) ───────► │  send-context receive   │
+   └───────────────────────┘         (ciphertext only)         └────────────────────────┘
 ```
 
 ## Features
@@ -45,16 +48,26 @@ The session is distilled into a structured **Context Handoff Skill** document, e
 ### Install
 
 ```bash
-npm install
-npm run build      # compiles src/ to dist/
-node dist/index.js --help
+npm install -g send-context
+send-context --help
 ```
 
-To install the `send-context` command globally:
+Or run it without installing:
 
 ```bash
-npm install -g .
+npx send-context --help
 ```
+
+<details>
+<summary>From source</summary>
+
+```bash
+git clone https://github.com/shafiqimtiaz/context-handoff.git
+cd context-handoff
+npm install && npm run build
+node dist/index.js --help
+```
+</details>
 
 ## Deploy the transport
 
@@ -82,9 +95,9 @@ deno task deploy     # deploys --prod, prints your *.deno.net host
 ### Send a context handoff
 
 ```bash
-SEND_CONTEXT_WORKER=your-project.deno.net node dist/index.js export
+SEND_CONTEXT_WORKER=your-project.deno.net send-context export
 # or pass the host and agent explicitly:
-node dist/index.js export --worker your-project.deno.net --agent pi
+send-context export --worker your-project.deno.net --agent pi
 ```
 
 You'll be guided through picking the agent, writing the brief, curating the appendix, and setting a password. The command prints a link:
@@ -97,12 +110,12 @@ send-context://your-project.deno.net/<id>#<password>
 
 ```bash
 # Launch an agent with the context injected:
-node dist/index.js receive 'send-context://…/<id>#<password>' -- pi "continue"
-node dist/index.js receive 'send-context://…/<id>#<password>' -- claude "continue"
-node dist/index.js receive 'send-context://…/<id>#<password>' -- opencode run "continue"
+send-context receive 'send-context://…/<id>#<password>' -- pi "continue"
+send-context receive 'send-context://…/<id>#<password>' -- claude "continue"
+send-context receive 'send-context://…/<id>#<password>' -- opencode run "continue"
 
 # Or just print the decrypted context handoff document:
-node dist/index.js receive 'send-context://…/<id>#<password>'
+send-context receive 'send-context://…/<id>#<password>'
 ```
 
 ## Supported agents

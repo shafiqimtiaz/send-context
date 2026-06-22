@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "commonjs",
   "bin": {
-    "send-context": "./dist/index.js"
+    "send-context": "dist/index.js"
   },
   "keywords": [
     "ai",
