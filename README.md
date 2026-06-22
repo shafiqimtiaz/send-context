@@ -7,7 +7,7 @@
 [![npm version](https://img.shields.io/npm/v/ctx-handoff.svg)](https://www.npmjs.com/package/ctx-handoff)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/node/v/ctx-handoff.svg)](https://nodejs.org)
-[![CI](https://github.com/shafiqimtiaz/context-handoff/actions/workflows/ci.yml/badge.svg)](https://github.com/shafiqimtiaz/context-handoff/actions/workflows/ci.yml)
+[![CI](https://github.com/shafiqimtiaz/ctx-handoff/actions/workflows/ci.yml/badge.svg)](https://github.com/shafiqimtiaz/ctx-handoff/actions/workflows/ci.yml)
 
 </div>
 
@@ -166,8 +166,8 @@ npx ctx-handoff --help
 <summary>From source</summary>
 
 ```bash
-git clone https://github.com/shafiqimtiaz/context-handoff.git
-cd context-handoff
+git clone https://github.com/shafiqimtiaz/ctx-handoff.git
+cd ctx-handoff
 npm install && npm run build
 node dist/index.js --help
 ```
@@ -356,8 +356,8 @@ worker/
 ## Development
 
 ```bash
-git clone https://github.com/shafiqimtiaz/context-handoff.git
-cd context-handoff
+git clone https://github.com/shafiqimtiaz/ctx-handoff.git
+cd ctx-handoff
 npm install
 npm run dev          # tsx watch — fast iteration on src/
 npm run typecheck    # tsc --noEmit

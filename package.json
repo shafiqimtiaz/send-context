@@ -18,13 +18,13 @@
     "pi",
     "encryption"
   ],
-  "homepage": "https://github.com/shafiqimtiaz/context-handoff#readme",
+  "homepage": "https://github.com/shafiqimtiaz/ctx-handoff#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/shafiqimtiaz/context-handoff.git"
+    "url": "git+https://github.com/shafiqimtiaz/ctx-handoff.git"
   },
   "bugs": {
-    "url": "https://github.com/shafiqimtiaz/context-handoff/issues"
+    "url": "https://github.com/shafiqimtiaz/ctx-handoff/issues"
   },
   "files": [
     "dist",
