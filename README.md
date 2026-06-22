@@ -18,23 +18,34 @@ node dist/index.js --help
 
 ## Deploy the transport worker
 
-The transport is a Cloudflare Worker backed by KV (zero-knowledge: it only ever
-stores encrypted blobs, 24h TTL).
+The transport runs on **Deno Deploy + Deno KV** (no credit card, native 24h
+TTL, zero-knowledge — it only ever stores encrypted blobs). Code: `worker/main.ts`.
+
+**Option A — GitHub (no local Deno needed):** push this repo, then in the
+[Deno Deploy dashboard](https://dash.deno.com) create a project linked to the
+repo with entrypoint `worker/main.ts`. KV is auto-provisioned. You get a host
+like `your-project.deno.dev`.
+
+**Option B — deployctl (local):**
 
 ```bash
+deno install -gArf jsr:@deno/deployctl   # one-time
 cd worker
-npm install
-npx wrangler kv namespace create HANDOFF_KV   # paste the id into wrangler.toml
-npx wrangler deploy                            # prints your worker host
+deno task dev        # local test at http://localhost:8000
+deno task deploy     # deploys --prod, prints your *.deno.dev host
 ```
+
+> Note: Deno KV caps each value at 64 KiB, so the worker limits payloads to
+> ~60 KB. Curated handoffs are far smaller; if you hit the limit, include fewer
+> appendix messages.
 
 ## Usage
 
 ### Sender
 
 ```bash
-HANDOFF_WORKER=handoff.you.workers.dev node dist/index.js export
-# or:  node dist/index.js export --worker handoff.you.workers.dev --agent pi
+HANDOFF_WORKER=your-project.deno.dev node dist/index.js export
+# or:  node dist/index.js export --worker your-project.deno.dev --agent pi
 ```
 
 You'll be guided to: pick the agent (auto-detected), optionally write the
@@ -42,7 +53,7 @@ objective / blockers / next steps, curate which raw messages to attach, and set
 a password. It prints a link:
 
 ```
-handoff://handoff.you.workers.dev/<id>#<password>
+handoff://your-project.deno.dev/<id>#<password>
 ```
 
 ### Receiver

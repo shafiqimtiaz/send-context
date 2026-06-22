@@ -12,11 +12,9 @@ export async function uploadPayload(
     body: JSON.stringify(payload),
   });
 
-  if (res.status === 413) {
-    throw new Error("Payload too large (worker limit is 1MB).");
-  }
   if (!res.ok) {
-    throw new Error(`Upload failed (HTTP ${res.status}).`);
+    const serverMsg = await readError(res);
+    throw new Error(serverMsg ?? `Upload failed (HTTP ${res.status}).`);
   }
   const data = (await res.json()) as { id?: string };
   if (!data.id) throw new Error("Worker did not return an id.");
@@ -38,4 +36,14 @@ export async function downloadPayload(
     throw new Error(`Download failed (HTTP ${res.status}).`);
   }
   return (await res.json()) as EncryptedPayload;
+}
+
+/** Best-effort extraction of a JSON `{error}` message from a failed response. */
+async function readError(res: Response): Promise<string | null> {
+  try {
+    const data = (await res.json()) as { error?: string };
+    return data.error ?? null;
+  } catch {
+    return null;
+  }
 }

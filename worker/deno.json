@@ -1,0 +1,13 @@
+{
+  "tasks": {
+    "dev": "deno run --unstable-kv --allow-net --watch main.ts",
+    "deploy": "deployctl deploy --prod main.ts"
+  },
+  "deploy": {
+    "runtime": {
+      "type": "dynamic",
+      "entrypoint": "main.ts"
+    }
+  },
+  "lint": { "rules": { "tags": ["recommended"] } }
+}
