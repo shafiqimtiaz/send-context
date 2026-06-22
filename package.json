@@ -39,7 +39,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepublishOnly": "npm run build && npm test",
-    "release": "release-it"
+    "release": "release-it",
+    "release:patch": "release-it patch --no-git.tag",
+    "release:minor": "release-it minor",
+    "release:major": "release-it major"
   },
   "engines": {
     "node": ">=20"

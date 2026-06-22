@@ -1,0 +1,9 @@
+{
+  "git": {
+    "commitMessage": "Release ${version}",
+    "tagName": "${version}"
+  },
+  "github": {
+    "release": false
+  }
+}
