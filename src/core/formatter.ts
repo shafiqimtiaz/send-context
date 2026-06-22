@@ -4,6 +4,10 @@ import { SessionMessage } from "../adapters/types.js";
  * The six human-authored sections of the Context Handoff Skill Standard. Any field the
  * sender does not provide falls back to a best-effort default derived from the
  * session, or an explicit "_Not specified_" marker.
+ *
+ * `topics` is set by the topic-aware distiller when the merged sessions cover
+ * 2+ distinct topics. When present, the 5 narrative fields are expected to
+ * carry `### <Topic>` sub-headers so the formatter can render topic sub-headings.
  */
 export interface HandoffSections {
   objective: string;
@@ -11,6 +15,7 @@ export interface HandoffSections {
   completedSteps: string;
   failedApproaches: string;
   nextSteps: string;
+  topics?: string[];
 }
 
 export interface HandoffInput {
@@ -36,13 +41,21 @@ export function formatToHandoffSkill(input: HandoffInput): string {
   const completedSteps = sections.completedSteps?.trim() || NOT_SPECIFIED;
   const failedApproaches = sections.failedApproaches?.trim() || NOT_SPECIFIED;
   const nextSteps = sections.nextSteps?.trim() || NOT_SPECIFIED;
+  const topics = sections.topics?.filter((t) => t.trim()) ?? [];
 
-  return [
+  const out: string[] = [
     `# Context Handoff Document`,
     `**Source Agent:** ${sourceAgent}`,
     `**Timestamp:** ${timestamp}`,
     `**Original Task:** ${originalTask}`,
     ``,
+  ];
+
+  if (topics.length > 0) {
+    out.push(`## Topics`, ...topics.map((t) => `- ${t}`), ``);
+  }
+
+  out.push(
     `## 1. Primary Objective`,
     objective,
     ``,
@@ -61,7 +74,9 @@ export function formatToHandoffSkill(input: HandoffInput): string {
     `## 6. Raw Context Appendix`,
     renderAppendix(appendix),
     ``,
-  ].join("\n");
+  );
+
+  return out.join("\n");
 }
 
 function renderAppendix(messages: SessionMessage[]): string {

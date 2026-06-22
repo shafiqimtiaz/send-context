@@ -90,3 +90,43 @@ test("formatter: objective falls back to first user line, trimmed and clipped", 
   assert.ok(m[1].length <= 201); // 200 chars + ellipsis
   assert.ok(m[1].endsWith("…"));
 });
+
+test("formatter: renders a Topics section when sections.topics is non-empty", () => {
+  const out = formatToHandoffSkill({
+    sourceAgent: "Pi",
+    timestamp: "2026-06-22T00:00:00.000Z",
+    allMessages: [{ role: "user", content: "First task" }],
+    appendix: [],
+    sections: {
+      topics: ["Refactor distiller", "Add Hindsight recall"],
+      objective: "Two workstreams",
+      currentState: "Refactor distiller: drafted\n\nAdd Hindsight recall: pending",
+      completedSteps: "### Refactor distiller\n- x\n\n### Add Hindsight recall\n- y",
+      failedApproaches: "None.",
+      nextSteps: "### Refactor distiller\n- a\n\n### Add Hindsight recall\n- b",
+    },
+  });
+  assert.match(out, /## Topics\n- Refactor distiller\n- Add Hindsight recall/);
+  assert.match(out, /### Refactor distiller\n- x/);
+  assert.match(out, /### Add Hindsight recall\n- y/);
+});
+
+test("formatter: omits the Topics section when topics is absent or empty", () => {
+  const out1 = formatToHandoffSkill({
+    sourceAgent: "Pi",
+    timestamp: "t",
+    allMessages: [{ role: "user", content: "x" }],
+    appendix: [],
+    sections: { objective: "Single thread" },
+  });
+  assert.doesNotMatch(out1, /## Topics/);
+
+  const out2 = formatToHandoffSkill({
+    sourceAgent: "Pi",
+    timestamp: "t",
+    allMessages: [{ role: "user", content: "x" }],
+    appendix: [],
+    sections: { topics: [], objective: "Single thread" },
+  });
+  assert.doesNotMatch(out2, /## Topics/);
+});
