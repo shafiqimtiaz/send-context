@@ -9,7 +9,7 @@ const program = new Command();
 program
   .name("send-context")
   .description("Relay AI coding-agent session context between developers via an encrypted, ephemeral link.")
-  .version("0.1.0")
+  .version("0.1.1")
   .enablePositionalOptions();
 
 program

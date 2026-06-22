@@ -1,6 +1,6 @@
 {
   "name": "send-context",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Agent-agnostic CLI to relay AI coding-agent session context between developers via an encrypted, ephemeral edge link.",
   "license": "MIT",
   "type": "commonjs",
