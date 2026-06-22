@@ -14,7 +14,7 @@ import {
   Spinner,
 } from "../core/handoff-builder.js";
 
-export interface ExportOptions {
+export interface SendOptions {
   agent?: AgentId;
   worker?: string;
 }
@@ -23,7 +23,7 @@ export interface ExportOptions {
  * Thin CLI shell around buildHandoff. This module owns the I/O concerns the
  * builder deliberately avoids: process.env, process.exit, @clack/prompts.
  */
-export async function runExport(opts: ExportOptions): Promise<void> {
+export async function runSend(opts: SendOptions): Promise<void> {
   const workerHost = opts.worker ?? process.env.CTX_HANDOFF_WORKER;
   if (!workerHost) {
     p.cancel(

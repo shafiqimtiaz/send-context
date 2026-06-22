@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { runExport, ExportOptions } from "./commands/export.js";
+import { runSend, SendOptions } from "./commands/send.js";
 import { runReceive } from "./commands/receive.js";
 import { AgentId } from "./adapters/index.js";
 
@@ -16,12 +16,12 @@ program
   .enablePositionalOptions();
 
 program
-  .command("export")
+  .command("send")
   .description("Extract the current agent session, format it, encrypt it, and produce a share link.")
   .option("-a, --agent <agent>", "force agent: pi | claude | opencode")
   .option("-w, --worker <host>", "Cloudflare Worker host (or set CTX_HANDOFF_WORKER)")
   .action((opts: { agent?: string; worker?: string }) =>
-    runExport({ agent: opts.agent as AgentId | undefined, worker: opts.worker } as ExportOptions),
+    runSend({ agent: opts.agent as AgentId | undefined, worker: opts.worker } as SendOptions),
   );
 
 program

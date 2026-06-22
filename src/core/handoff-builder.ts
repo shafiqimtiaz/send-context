@@ -51,9 +51,9 @@ export interface HandoffBuilderDeps {
   uploadPayload: (workerHost: string, payload: EncryptedPayload) => Promise<string>;
   encodeLink: (link: HandoffLink) => string;
   geminiAvailable: () => boolean;
-  distillSession: (messages: SessionMessage[]) => Promise<{
+  distillSession: (messages: SessionMessage[], sessions: SessionRef[]) => Promise<{
     objective: string; currentState: string; completedSteps: string;
-    failedApproaches: string; nextSteps: string;
+    failedApproaches: string; nextSteps: string; topics?: string[];
   }>;
   formatToHandoffSkill: (input: {
     sourceAgent: string;
@@ -62,7 +62,7 @@ export interface HandoffBuilderDeps {
     allMessages: SessionMessage[];
     sections?: Partial<{
       objective: string; currentState: string; completedSteps: string;
-      failedApproaches: string; nextSteps: string;
+      failedApproaches: string; nextSteps: string; topics?: string[];
     }>;
   }) => string;
   isStdoutTty: boolean;
@@ -88,7 +88,7 @@ const APPENDIX_DEFAULT_RECENT = 10;
 export async function buildHandoff(args: BuildHandoffArgs): Promise<BuildHandoffResult> {
   const { workerHost, presetAgent, cwd, deps } = args;
   const p = deps.prompter;
-  p.intro("ctx-handoff export");
+  p.intro("ctx-handoff send");
 
   // 1. Pick the agent.
   const agentId = await resolveAgent(presetAgent, cwd, deps);
@@ -140,7 +140,7 @@ export async function buildHandoff(args: BuildHandoffArgs): Promise<BuildHandoff
   if (deps.geminiAvailable()) {
     spin.start("Distilling session with Gemini");
     try {
-      sections = await deps.distillSession(messages);
+      sections = await deps.distillSession(messages, chosen);
       appendix = [];
       source = "distilled";
       spin.stop("Distilled into a handoff brief.");
