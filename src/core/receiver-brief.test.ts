@@ -314,17 +314,18 @@ test("buildReceiverBrief opencode injection uses `run --file` (not a positional 
   assert.ok(result.spawnInjection, "spawnInjection should be present");
   assert.equal(result.spawnInjection!.bin, "opencode");
   const args = result.spawnInjection!.args;
-  // Must be `run --file <path> <message>` — not a single positional arg.
+  // Must be `run <message> --file <path>` — not a single positional arg.
   assert.equal(args[0], "run");
-  assert.equal(args[1], "--file");
-  assert.equal(typeof args[2], "string");
-  assert.match(args[2], /handoff-injection-\d+\.md$/);
-  assert.ok(args[2]!.startsWith(tmp), "tmp file must live under resolveTmpdir()");
-  assert.ok(existsSync(args[2]!));
+  assert.equal(args[1], "Continue the work described in the attached handoff document.");
+  assert.equal(args[2], "--file");
+  assert.equal(typeof args[3], "string");
+  assert.match(args[3], /handoff-injection-\d+\.md$/);
+  assert.ok(args[3]!.startsWith(tmp), "tmp file must live under resolveTmpdir()");
+  assert.ok(existsSync(args[3]!));
   // The full injection (preamble + markdown + user request) must live in the
   // file — NOT in a single argv entry.
   assert.equal(args.length, 4);
-  const onDisk = readFileSync(args[2]!, "utf8");
+  const onDisk = readFileSync(args[3]!, "utf8");
   assert.match(onDisk, /SYSTEM CONTEXT INJECTION/);
   assert.match(onDisk, /# Handoff/);
   assert.match(onDisk, /pick up from there/);
@@ -393,7 +394,7 @@ test("buildReceiverBrief opencode injection tmp file is namespaced by run", asyn
   const r2 = await buildReceiverBrief({ decrypted: "second", userRequest: "", deps });
 
   assert.ok(r1.spawnInjection && r2.spawnInjection);
-  assert.notEqual(r1.spawnInjection!.args[2], r2.spawnInjection!.args[2]);
+  assert.notEqual(r1.spawnInjection!.args[3], r2.spawnInjection!.args[3]);
 });
 
 test("buildReceiverBrief degrades gracefully when Gemini render fails", async () => {

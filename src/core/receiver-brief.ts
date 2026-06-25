@@ -198,9 +198,9 @@ function buildSpawnInjection(
       bin: "opencode",
       args: [
         "run",
+        "Continue the work described in the attached handoff document.",
         "--file",
         path,
-        "Continue the work described in the attached handoff document.",
       ],
     };
   }

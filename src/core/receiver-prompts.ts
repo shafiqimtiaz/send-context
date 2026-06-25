@@ -58,6 +58,7 @@ export const MINIMAL_HTML_SCAFFOLD = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
 <title>Handoff Brief</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -70,6 +71,7 @@ export const MINIMAL_HTML_SCAFFOLD = `<!doctype html>
      ---------------------------------------------------------------------- */
 
   :root {
+    color-scheme: light;
     /* surface */
     --canvas: #faf9f5;               /* tinted cream — page floor */
     --surface-soft: #f5f0e8;         /* soft band / blockquote wash */

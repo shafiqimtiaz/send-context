@@ -134,6 +134,22 @@ test("MINIMAL_HTML_SCAFFOLD: details/summary are styled for the collapsed raw ap
   assert.match(MINIMAL_HTML_SCAFFOLD, /details summary[^}]*text-transform:\s*uppercase/);
 });
 
+test("MINIMAL_HTML_SCAFFOLD: declares color-scheme: light to prevent browser auto-inversion in dark mode", () => {
+  // Without a color-scheme declaration, Chrome/Firefox auto-invert light
+  // pages when the system is in dark mode, turning cream→dark and dark
+  // text→white. The meta tag and/or CSS :root rule prevents this.
+  assert.match(
+    MINIMAL_HTML_SCAFFOLD,
+    /<meta[^>]*color-scheme[^>]*light/i,
+    "should have a color-scheme meta tag",
+  );
+  assert.match(
+    MINIMAL_HTML_SCAFFOLD,
+    /color-scheme:\s*light/i,
+    "should declare color-scheme: light in the CSS",
+  );
+});
+
 test("MINIMAL_HTML_SCAFFOLD: applies a print stylesheet so the brief prints cleanly", () => {
   assert.match(MINIMAL_HTML_SCAFFOLD, /@media\s+print/);
 });
