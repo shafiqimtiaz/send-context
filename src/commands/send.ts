@@ -20,18 +20,31 @@ export interface SendOptions {
 }
 
 /**
+ * Default hosted worker for users who don't pass --worker or set
+ * CTX_HANDOFF_WORKER. Authored by the package maintainer; advanced users
+ * self-host by setting their own. No trailing slash — transport.ts
+ * constructs `${host}/upload` and `${host}/download/${id}`.
+ */
+export const DEFAULT_WORKER_HOST = "https://ctx-handoff.shafiqimtiaz.deno.net";
+
+/**
+ * Precedence: --worker flag > CTX_HANDOFF_WORKER env > DEFAULT_WORKER_HOST.
+ * Extracted from runSend so it can be unit-tested without process.exit /
+ * @clack/prompts side effects.
+ */
+export function resolveWorkerHost(
+  opts: { worker?: string },
+  env: { CTX_HANDOFF_WORKER?: string },
+): string {
+  return opts.worker ?? (env.CTX_HANDOFF_WORKER || DEFAULT_WORKER_HOST);
+}
+
+/**
  * Thin CLI shell around buildHandoff. This module owns the I/O concerns the
  * builder deliberately avoids: process.env, process.exit, @clack/prompts.
  */
 export async function runSend(opts: SendOptions): Promise<void> {
-  const workerHost = opts.worker ?? process.env.CTX_HANDOFF_WORKER;
-  if (!workerHost) {
-    p.cancel(
-      "No worker host. Pass --worker <host> or set CTX_HANDOFF_WORKER (e.g. your-project.deno.net).",
-    );
-    process.exitCode = 1;
-    return;
-  }
+  const workerHost = resolveWorkerHost(opts, process.env);
 
   const deps: HandoffBuilderDeps = {
     prompter: clackPrompter,
